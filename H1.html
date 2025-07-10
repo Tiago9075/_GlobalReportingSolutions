@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTM Acquisition Efficiency Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: A classic dashboard layout was chosen for its intuitive user flow, presenting information in a hierarchical manner. Users first see high-level, aggregate KPIs for a quick health check. They can then use global filters to explore specific contexts. The main body uses a grid to display key comparative and trend-based visualizations side-by-side. Finally, a detailed, sortable table provides granular data for deep-dive analysis. This structure supports the common business intelligence workflow of "overview first, zoom and filter, then details-on-demand," making it highly usable for the target GTM leadership audience. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Overall performance -> Goal: Inform -> Viz/Presentation: KPI Cards with Icons and Dynamic Insights -> Interaction: Dynamic text updates on filter change -> Justification: Provides immediate, at-a-glance summary of the most critical metrics with added visual context and narrative. -> Library/Method: HTML/Tailwind + JS innerText update.
+        - Report Info: Summary Insights -> Goal: Synthesize/Inform -> Viz/Presentation: Dynamic Text Blocks (Infographic-style) -> Interaction: Text updates on filter change -> Justification: Offers a narrative summary of key findings, making complex data consumable through concise, actionable statements. -> Library/Method: HTML/Tailwind + JS innerText update.
+        - Report Info: CAC over time -> Goal: Analyze Change -> Viz/Presentation: Line Chart with Data Labels -> Interaction: Hover tooltips, dynamic updates on filter change -> Justification: The line chart is the standard and most effective way to visualize a continuous data series over time, clearly showing trends, now with direct values. -> Library/Method: Chart.js (Canvas) + chartjs-plugin-datalabels.
+        - Report Info: CAC by Channel -> Goal: Compare -> Viz/Presentation: Table with Alternate Colors & Conditional Formatting -> Interaction: Dynamic updates on filter change -> Justification: Changed to a table for precise comparison and easy readability of CAC values by channel, with alternating row colors for improved scanning, and conditional formatting for quick insights into efficiency. -> Library/Method: HTML/Tailwind + JS for dynamic row generation and conditional styling.
+        - Report Info: LTV:CAC by Segment -> Goal: Compare/Analyze Relationships -> Viz/Presentation: Polar Area Chart with Data Labels -> Interaction: Hover tooltips, dynamic updates -> Justification: Polar area chart offers an alternative visual for comparing profitability ratios across segments. -> Library/Method: Chart.js (Canvas) + chartjs-plugin-datalabels.
+        - Report Info: Granular Data -> Goal: Organize/Explore -> Viz/Presentation: Sortable HTML Table -> Interaction: Column sorting, dynamic filtering -> Justification: A table is necessary to provide access to the raw numbers, allowing for detailed verification and ad-hoc analysis. -> Library/Method: HTML/Tailwind + JS for dynamic row generation and sorting.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 320px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+        }
+        /* Alternating row colors for the CAC by Channel table */
+        #cacByChannelTableBody tr:nth-child(even) {
+            background-color: #f9fafb; /* neutral-50 */
+        }
+        /* Conditional formatting classes */
+        .cac-good {
+            color: #10b981; /* green-600 */
+            font-weight: 500;
+        }
+        .cac-moderate {
+            color: #f97316; /* orange-600 */
+            font-weight: 500;
+        }
+        .cac-high {
+            color: #ef4444; /* red-600 */
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="bg-neutral-50 text-neutral-800">
+
+    <main class="container mx-auto p-4 md:p-8">
+        <header class="mb-8 flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-neutral-900">GTM Acquisition Efficiency Dashboard</h1>
+                <p class="text-neutral-500 mt-1">An interactive framework for analyzing customer acquisition cost and efficiency.</p>
+            </div>
+            <!-- Appzen Logo: Using the provided file with an onerror fallback -->
+            <img src="appzen@2x.png" alt="Appzen Logo" class="h-12 w-auto ml-4" onerror="this.onerror=null;this.src='https://placehold.co/120x48/000000/FFFFFF?text=Appzen';this.alt='Appzen Logo Text';">
+        </header>
+
+        <section id="filters" class="mb-8 p-4 bg-white rounded-lg shadow-sm">
+             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                    <label for="timePeriodFilter" class="block text-sm font-medium text-neutral-700 mb-1">Time Period</label>
+                    <select id="timePeriodFilter" class="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                        <option value="all">All Time</option>
+                        <option value="q1_2024">Q1 2024</option>
+                        <option value="q2_2024">Q2 2024</option>
+                        <option value="q3_2024">Q3 2024</option>
+                        <option value="q4_2024">Q4 2024</option>
+                        <option value="q1_2025">Q1 2025</option>
+                        <option value="q2_2025">Q2 2025</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="regionFilter" class="block text-sm font-medium text-neutral-700 mb-1">Region</label>
+                    <select id="regionFilter" class="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                        <option value="All">All Regions</option>
+                        <option value="North America">North America</option>
+                        <option value="EMEA">EMEA</option>
+                        <option value="APAC">APAC</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="segmentFilter" class="block text-sm font-medium text-neutral-700 mb-1">Customer Segment</label>
+                    <select id="segmentFilter" class="w-full bg-neutral-100 border border-neutral-200 rounded-md p-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                        <option value="All">All Segments</option>
+                        <option value="SMB">SMB</option>
+                        <option value="Mid-Market">Mid-Market</option>
+                        <option value="Enterprise">Enterprise</option>
+                    </select>
+                </div>
+            </div>
+        </section>
+        
+        <section id="kpis" class="mb-8">
+            <div class="intro mb-4">
+                <p class="text-neutral-600">The metrics below provide a high-level summary of acquisition performance based on the selected filters. They serve as the primary health indicators for the Go-To-Market strategy's efficiency.</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-sm flex items-start space-x-3">
+                    <!-- KPI Icon: New Customers - Using Unicode Emoji -->
+                    <span class="text-blue-500 text-3xl">??</span>
+                    <div>
+                        <h3 class="text-neutral-500 text-sm font-medium">New Customers</h3>
+                        <p id="kpiNewCustomers" class="text-3xl font-bold mt-2">0</p>
+                        <p id="insightNewCustomers" class="text-xs text-neutral-500 mt-1"></p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm flex items-start space-x-3">
+                    <!-- KPI Icon: Overall CAC - Using Unicode Emoji -->
+                    <span class="text-green-500 text-3xl">??</span>
+                    <div>
+                        <h3 class="text-neutral-500 text-sm font-medium">Overall CAC</h3>
+                        <p id="kpiOverallCAC" class="text-3xl font-bold mt-2">$0</p>
+                        <p id="insightOverallCAC" class="text-xs text-neutral-500 mt-1"></p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm flex items-start space-x-3">
+                    <!-- KPI Icon: LTV:CAC Ratio - Using Unicode Emoji -->
+                    <span class="text-orange-500 text-3xl">??</span>
+                    <div>
+                        <h3 class="text-neutral-500 text-sm font-medium">Avg. LTV:CAC Ratio</h3>
+                        <p id="kpiLtvCacRatio" class="text-3xl font-bold mt-2">0:1</p>
+                        <p id="insightLtvCacRatio" class="text-xs text-neutral-500 mt-1"></p>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm flex items-start space-x-3">
+                    <!-- KPI Icon: Payback Period - Using Unicode Emoji -->
+                    <span class="text-purple-500 text-3xl">??</span>
+                    <div>
+                        <h3 class="text-neutral-500 text-sm font-medium">Avg. Payback Period</h3>
+                        <p id="kpiPaybackPeriod" class="text-3xl font-bold mt-2">0 mos</p>
+                        <p id="insightPaybackPeriod" class="text-xs text-neutral-500 mt-1"></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="key-insights" class="mb-8 p-4 bg-white rounded-lg shadow-sm">
+            <h3 class="font-semibold mb-1 text-neutral-900">Key Insights for the Selected Period</h3>
+            <p class="text-sm text-neutral-500 mb-4">These insights provide a quick summary of the most important takeaways from the current data, acting as a dynamic infographic.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-neutral-700">
+                <div class="flex items-start space-x-2">
+                    <span class="text-xl text-blue-600">??</span>
+                    <p id="insightChannelPerformance" class="text-sm"></p>
+                </div>
+                <div class="flex items-start space-x-2">
+                    <span class="text-xl text-green-600">??</span>
+                    <p id="insightSegmentProfitability" class="text-sm"></p>
+                </div>
+                <div class="flex items-start space-x-2">
+                    <span class="text-xl text-orange-600">??</span>
+                    <p id="insightCACtrend" class="text-sm"></p>
+                </div>
+                <div class="flex items-start space-x-2">
+                    <span class="text-xl text-purple-600">??</span>
+                    <p id="insightRegionalFocus" class="text-sm"></p>
+                </div>
+            </div>
+        </section>
+
+        <section id="visualizations" class="mb-8">
+             <div class="intro mb-4">
+                <p class="text-neutral-600">These visualizations allow for deeper exploration into acquisition efficiency. Interact with the charts to see detailed figures and use the filters above to analyze trends across different channels, segments, and regions.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+                <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm">
+                    <h3 class="font-semibold mb-1 text-neutral-900">CAC Trend Over Time</h3>
+                    <p class="text-sm text-neutral-500 mb-4">Tracks how acquisition costs have evolved, highlighting the impact of strategic initiatives.</p>
+                    <div class="chart-container">
+                        <canvas id="cacTrendChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm">
+                    <h3 class="font-semibold mb-1 text-neutral-900">CAC by Channel</h3>
+                    <p class="text-sm text-neutral-500 mb-4">Compares the cost-effectiveness of different acquisition channels to inform budget allocation.</p>
+                    <!-- Replaced canvas with a table for CAC by Channel -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-neutral-200">
+                            <thead class="bg-neutral-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Channel</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">CAC</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cacByChannelTableBody" class="bg-white divide-y divide-neutral-200">
+                                <!-- Data will be inserted here by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mt-4 text-sm text-neutral-600">
+                        <p class="flex items-center"><span class="inline-block w-3 h-3 rounded-full bg-green-600 mr-2"></span>CAC $\le$ \$500 (Good)</p>
+                        <p class="flex items-center"><span class="inline-block w-3 h-3 rounded-full bg-orange-600 mr-2"></span>CAC \$501 - \$1000 (Moderate)</p>
+                        <p class="flex items-center"><span class="inline-block w-3 h-3 rounded-full bg-red-600 mr-2"></span>CAC $>$ \$1000 (High)</p>
+                    </div>
+                </div>
+                <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm">
+                    <h3 class="font-semibold mb-1 text-neutral-900">LTV:CAC Ratio by Segment</h3>
+                    <p class="text-sm text-neutral-500 mb-4">Shows which customer segments are most profitable relative to their acquisition cost.</p>
+                    <div class="chart-container">
+                        <canvas id="ltvCacBySegmentChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-4 md:p-6 rounded-lg shadow-sm">
+                    <h3 class="font-semibold mb-1 text-neutral-900">New Customers by Region</h3>
+                     <p class="text-sm text-neutral-500 mb-4">Illustrates the volume of new customers acquired in each geographical market.</p>
+                    <div class="chart-container">
+                        <canvas id="customersByRegionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section id="details" class="bg-white p-4 md:p-6 rounded-lg shadow-sm">
+            <h3 class="font-semibold mb-1 text-neutral-900">Detailed Breakdown</h3>
+            <p class="text-sm text-neutral-500 mb-4">The table below provides granular data for all acquisition activities based on the current filters. Click on headers to sort the data.</p>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-neutral-200">
+                    <thead class="bg-neutral-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Channel</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Segment</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Region</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Spend</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">New Customers</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">CAC</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailsTableBody" class="bg-white divide-y divide-neutral-200">
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const mockData = [
+                // 2024 Data
+                { month: '2024-01-01', quarter: 'q1_2024', channel: 'Paid Search', segment: 'SMB', region: 'North America', spend: 45000, newCustomers: 90, ltv: 2400, monthlyRevenue: 48 },
+                { month: '2024-01-01', quarter: 'q1_2024', channel: 'Organic Search', segment: 'Mid-Market', region: 'EMEA', spend: 9000, newCustomers: 45, ltv: 5800, monthlyRevenue: 95 },
+                { month: '2024-01-01', quarter: 'q1_2024', channel: 'Paid Social', segment: 'SMB', region: 'APAC', spend: 28000, newCustomers: 38, ltv: 1900, monthlyRevenue: 42 },
+                { month: '2024-02-01', quarter: 'q1_2024', channel: 'Referrals', segment: 'Enterprise', region: 'North America', spend: 4800, newCustomers: 9, ltv: 24000, monthlyRevenue: 380 },
+                { month: '2024-02-01', quarter: 'q1_2024', channel: 'Paid Search', segment: 'Mid-Market', region: 'EMEA', spend: 58000, newCustomers: 105, ltv: 6200, monthlyRevenue: 105 },
+                { month: '2024-03-01', quarter: 'q1_2024', channel: 'Organic Search', segment: 'SMB', region: 'North America', spend: 11000, newCustomers: 60, ltv: 2500, monthlyRevenue: 50 },
+                { month: '2024-03-01', quarter: 'q1_2024', channel: 'Sales Outbound', segment: 'Enterprise', region: 'EMEA', spend: 75000, newCustomers: 18, ltv: 29000, monthlyRevenue: 480 },
+                
+                { month: '2024-04-01', quarter: 'q2_2024', channel: 'Paid Search', segment: 'SMB', region: 'APAC', spend: 52000, newCustomers: 100, ltv: 2450, monthlyRevenue: 49 },
+                { month: '2024-04-01', quarter: 'q2_2024', channel: 'Content Marketing', segment: 'Mid-Market', region: 'North America', spend: 23000, newCustomers: 42, ltv: 6800, monthlyRevenue: 115 },
+                { month: '2024-05-01', quarter: 'q2_2024', channel: 'Paid Social', segment: 'SMB', region: 'EMEA', spend: 38000, newCustomers: 55, ltv: 2100, monthlyRevenue: 46 },
+                { month: '2024-05-01', quarter: 'q2_2024', channel: 'Organic Search', segment: 'Enterprise', region: 'APAC', spend: 14000, newCustomers: 14, ltv: 27000, monthlyRevenue: 430 },
+                { month: '2024-06-01', quarter: 'q2_2024', channel: 'Events', segment: 'Enterprise', region: 'North America', spend: 95000, newCustomers: 23, ltv: 31000, monthlyRevenue: 530 },
+
+                { month: '2024-07-01', quarter: 'q3_2024', channel: 'Paid Search', segment: 'Mid-Market', region: 'North America', spend: 68000, newCustomers: 125, ltv: 6600, monthlyRevenue: 112 },
+                { month: '2024-07-01', quarter: 'q3_2024', channel: 'Referrals', segment: 'SMB', region: 'EMEA', spend: 5500, newCustomers: 28, ltv: 2900, monthlyRevenue: 58 },
+                { month: '2024-08-01', quarter: 'q3_2024', channel: 'Sales Outbound', segment: 'Enterprise', region: 'APAC', spend: 88000, newCustomers: 20, ltv: 30000, monthlyRevenue: 500 },
+                { month: '2024-08-01', quarter: 'q3_2024', channel: 'Content Marketing', segment: 'SMB', region: 'North America', spend: 19000, newCustomers: 50, ltv: 2700, monthlyRevenue: 53 },
+                { month: '2024-09-01', quarter: 'q3_2024', channel: 'Paid Social', segment: 'Mid-Market', region: 'EMEA', spend: 35000, newCustomers: 50, ltv: 6000, monthlyRevenue: 100 },
+                
+                { month: '2024-10-01', quarter: 'q4_2024', channel: 'Paid Search', segment: 'SMB', region: 'North America', spend: 60000, newCustomers: 110, ltv: 2600, monthlyRevenue: 52 },
+                { month: '2024-10-01', quarter: 'q4_2024', channel: 'Organic Search', segment: 'Enterprise', region: 'EMEA', spend: 16000, newCustomers: 16, ltv: 29000, monthlyRevenue: 460 },
+                { month: '2024-11-01', quarter: 'q4_2024', channel: 'Events', segment: 'Mid-Market', region: 'APAC', spend: 80000, newCustomers: 30, ltv: 7500, monthlyRevenue: 125 },
+                { month: '2024-11-01', quarter: 'q4_2024', channel: 'Sales Outbound', segment: 'SMB', region: 'North America', spend: 40000, newCustomers: 70, ltv: 2300, monthlyRevenue: 45 },
+                { month: '2024-12-01', quarter: 'q4_2024', channel: 'Content Marketing', segment: 'Enterprise', region: 'EMEA', spend: 28000, newCustomers: 12, ltv: 30000, monthlyRevenue: 500 },
+
+                // 2025 Data (Existing)
+                { month: '2025-01-01', quarter: 'q1_2025', channel: 'Paid Search', segment: 'SMB', region: 'North America', spend: 50000, newCustomers: 100, ltv: 2500, monthlyRevenue: 50 },
+                { month: '2025-01-01', quarter: 'q1_2025', channel: 'Organic Search', segment: 'Mid-Market', region: 'EMEA', spend: 10000, newCustomers: 50, ltv: 6000, monthlyRevenue: 100 },
+                { month: '2025-01-01', quarter: 'q1_2025', channel: 'Paid Social', segment: 'SMB', region: 'APAC', spend: 30000, newCustomers: 40, ltv: 2000, monthlyRevenue: 45 },
+                { month: '2025-01-01', quarter: 'q1_2025', channel: 'Referrals', segment: 'Enterprise', region: 'North America', spend: 5000, newCustomers: 10, ltv: 25000, monthlyRevenue: 400 },
+                { month: '2025-02-01', quarter: 'q1_2025', channel: 'Paid Search', segment: 'Mid-Market', region: 'EMEA', spend: 60000, newCustomers: 110, ltv: 6500, monthlyRevenue: 110 },
+                { month: '2025-02-01', quarter: 'q1_2025', channel: 'Organic Search', segment: 'SMB', region: 'North America', spend: 12000, newCustomers: 65, ltv: 2600, monthlyRevenue: 52 },
+                { month: '2025-02-01', quarter: 'q1_2025', channel: 'Sales Outbound', segment: 'Enterprise', region: 'EMEA', spend: 80000, newCustomers: 20, ltv: 30000, monthlyRevenue: 500 },
+                { month: '2025-03-01', quarter: 'q1_2025', channel: 'Paid Search', segment: 'SMB', region: 'APAC', spend: 55000, newCustomers: 105, ltv: 2550, monthlyRevenue: 51 },
+                { month: '2025-03-01', quarter: 'q1_2025', channel: 'Content Marketing', segment: 'Mid-Market', region: 'North America', spend: 25000, newCustomers: 45, ltv: 7000, monthlyRevenue: 120 },
+                { month: '2025-04-01', quarter: 'q2_2025', channel: 'Paid Social', segment: 'SMB', region: 'EMEA', spend: 40000, newCustomers: 60, ltv: 2200, monthlyRevenue: 48 },
+                { month: '2025-04-01', quarter: 'q2_2025', channel: 'Organic Search', segment: 'Enterprise', region: 'APAC', spend: 15000, newCustomers: 15, ltv: 28000, monthlyRevenue: 450 },
+                { month: '2025-04-01', quarter: 'q2_2025', channel: 'Events', segment: 'Enterprise', region: 'North America', spend: 100000, newCustomers: 25, ltv: 32000, monthlyRevenue: 550 },
+                { month: '2025-05-01', quarter: 'q2_2025', channel: 'Paid Search', segment: 'Mid-Market', region: 'North America', spend: 70000, newCustomers: 130, ltv: 6800, monthlyRevenue: 115 },
+                { month: '2025-05-01', quarter: 'q2_2025', channel: 'Referrals', segment: 'SMB', region: 'EMEA', spend: 6000, newCustomers: 30, ltv: 3000, monthlyRevenue: 60 },
+                { month: '2025-06-01', quarter: 'q2_2025', channel: 'Sales Outbound', segment: 'Enterprise', region: 'APAC', spend: 90000, newCustomers: 22, ltv: 31000, monthlyRevenue: 520 },
+                { month: '2025-06-01', quarter: 'q2_2025', channel: 'Content Marketing', segment: 'SMB', region: 'North America', spend: 20000, newCustomers: 55, ltv: 2800, monthlyRevenue: 55 },
+            ];
+
+            const timePeriodFilter = document.getElementById('timePeriodFilter');
+            const regionFilter = document.getElementById('regionFilter');
+            const segmentFilter = document.getElementById('segmentFilter');
+
+            const kpiNewCustomers = document.getElementById('kpiNewCustomers');
+            const kpiOverallCAC = document.getElementById('kpiOverallCAC');
+            const kpiLtvCacRatio = document.getElementById('kpiLtvCacRatio');
+            const kpiPaybackPeriod = document.getElementById('kpiPaybackPeriod');
+            
+            const insightNewCustomers = document.getElementById('insightNewCustomers');
+            const insightOverallCAC = document.getElementById('insightOverallCAC');
+            const insightLtvCacRatio = document.getElementById('insightLtvCacRatio');
+            const insightPaybackPeriod = document.getElementById('insightPaybackPeriod');
+
+            const insightChannelPerformance = document.getElementById('insightChannelPerformance');
+            const insightSegmentProfitability = document.getElementById('insightSegmentProfitability');
+            const insightCACtrend = document.getElementById('insightCACtrend');
+            const insightRegionalFocus = document.getElementById('insightRegionalFocus');
+
+            const detailsTableBody = document.getElementById('detailsTableBody');
+            const cacByChannelTableBody = document.getElementById('cacByChannelTableBody'); // New: Get the tbody for CAC by Channel table
+
+            const formatCurrency = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
+
+            const chartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#4b5563' // neutral-600
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    if (context.chart.canvas.id === 'ltvCacBySegmentChart') {
+                                        label += `${context.parsed.y.toFixed(1)}:1`;
+                                    } else {
+                                        label += formatCurrency(context.parsed.y);
+                                    }
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    datalabels: {
+                        color: '#4b5563', // neutral-600
+                        font: {
+                            weight: 'bold',
+                            size: 10
+                        },
+                        formatter: (value, context) => {
+                            if (context.chart.canvas.id === 'ltvCacBySegmentChart') {
+                                return `${value.toFixed(1)}:1`;
+                            } else if (context.chart.canvas.id === 'customersByRegionChart') {
+                                return value.toLocaleString(); // Just the number for doughnut
+                            }
+                            return formatCurrency(value);
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value, index, ticks) {
+                                if (this.chart.canvas.id === 'ltvCacBySegmentChart') return `${value}:1`;
+                                return formatCurrency(value);
+                            },
+                            color: '#6b7280' // neutral-500
+                        },
+                        grid: {
+                            color: '#e5e7eb' // neutral-200
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#6b7280' // neutral-500
+                        },
+                        grid: {
+                            color: '#e5e7eb' // neutral-200
+                        }
+                    }
+                }
+            };
+
+            // Specific datalabels configuration for doughnut chart for better visibility
+            const doughnutChartOptions = {
+                ...chartOptions,
+                plugins: {
+                    ...chartOptions.plugins,
+                    datalabels: {
+                        color: '#ffffff', // White color for labels on dark segments
+                        font: {
+                            weight: 'bold',
+                            size: 12
+                        },
+                        formatter: (value, context) => {
+                            // Display label and value for doughnut chart
+                            return context.chart.data.labels[context.dataIndex] + '\n' + value.toLocaleString();
+                        },
+                        textShadowBlur: 4,
+                        textShadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            };
+
+            // Options for Polar Area Chart (LTV:CAC by Segment)
+            const ltvCacBySegmentChartOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            color: '#4b5563'
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || ''; // For polarArea, label is context.label
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.r !== null) { // For polarArea, value is context.parsed.r
+                                    label += `${context.parsed.r.toFixed(1)}:1`;
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    datalabels: {
+                        color: '#ffffff', // White color for labels on segments
+                        font: {
+                            weight: 'bold',
+                            size: 12
+                        },
+                        formatter: (value, context) => {
+                            return `${value.toFixed(1)}:1`; // Format for LTV:CAC ratio
+                        },
+                        anchor: 'center', // Position labels in the center of the arc
+                        align: 'center',
+                        textShadowBlur: 4,
+                        textShadowColor: 'rgba(0, 0, 0, 0.5)'
+                    }
+                },
+                scales: {
+                    r: { // Radial scale for polar area
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return `${value}:1`;
+                            },
+                            color: '#6b7280'
+                        },
+                        grid: {
+                            color: '#e5e7eb'
+                        }
+                    }
+                }
+            };
+
+
+            const cacTrendChartCtx = document.getElementById('cacTrendChart').getContext('2d');
+            // Removed cacByChannelChartCtx as it's now a table
+            const ltvCacBySegmentChartCtx = document.getElementById('ltvCacBySegmentChart').getContext('2d');
+            const customersByRegionChartCtx = document.getElementById('customersByRegionChart').getContext('2d');
+
+            let cacTrendChart = new Chart(cacTrendChartCtx, { type: 'line', data: {}, options: chartOptions, plugins: [ChartDataLabels] });
+            // Removed cacByChannelChart initialization
+            let ltvCacBySegmentChart = new Chart(ltvCacBySegmentChartCtx, { type: 'polarArea', data: {}, options: ltvCacBySegmentChartOptions, plugins: [ChartDataLabels] });
+            let customersByRegionChart = new Chart(customersByRegionChartCtx, { type: 'doughnut', data: {}, options: doughnutChartOptions, plugins: [ChartDataLabels] });
+
+            function updateDashboard() {
+                const selectedTime = timePeriodFilter.value;
+                const selectedRegion = regionFilter.value;
+                const selectedSegment = segmentFilter.value;
+                
+                const filteredData = mockData.filter(d => 
+                    (selectedTime === 'all' || d.quarter === selectedTime) &&
+                    (selectedRegion === 'All' || d.region === selectedRegion) &&
+                    (selectedSegment === 'All' || d.segment === selectedSegment)
+                );
+
+                updateKPIs(filteredData);
+                updateCacTrendChart(filteredData);
+                updateCacByChannelTable(filteredData); // Updated to call table update function
+                updateLtvCacBySegmentChart(filteredData);
+                updateCustomersByRegionChart(filteredData);
+                updateDetailsTable(filteredData);
+                updateSummaryInsights(filteredData);
+            }
+
+            function updateKPIs(data) {
+                const totalSpend = data.reduce((sum, d) => sum + d.spend, 0);
+                const totalCustomers = data.reduce((sum, d) => sum + d.newCustomers, 0);
+                
+                const overallCAC = totalCustomers > 0 ? totalSpend / totalCustomers : 0;
+
+                const ltvSum = data.reduce((sum, d) => sum + (d.ltv * d.newCustomers), 0);
+                const avgLTV = totalCustomers > 0 ? ltvSum / totalCustomers : 0;
+                const ltvCacRatio = overallCAC > 0 ? avgLTV / overallCAC : 0;
+                
+                const monthlyRevenueSum = data.reduce((sum, d) => sum + (d.monthlyRevenue * d.newCustomers), 0);
+                const avgMonthlyRevenue = totalCustomers > 0 ? monthlyRevenueSum / totalCustomers : 0; 
+                const paybackPeriod = avgMonthlyRevenue > 0 ? overallCAC / avgMonthlyRevenue : 0;
+
+                kpiNewCustomers.textContent = totalCustomers.toLocaleString();
+                kpiOverallCAC.textContent = formatCurrency(overallCAC);
+                kpiLtvCacRatio.textContent = `${ltvCacRatio.toFixed(1)}:1`;
+                kpiPaybackPeriod.textContent = `${paybackPeriod.toFixed(1)} mos`;
+
+                // Dynamic KPI Insights
+                insightNewCustomers.textContent = totalCustomers > 500 ? "Strong acquisition volume." : "Volume needs attention.";
+                insightOverallCAC.textContent = overallCAC < 500 ? "Efficient acquisition cost." : "Review cost efficiency.";
+                insightLtvCacRatio.textContent = ltvCacRatio > 3 ? "Healthy long-term value." : "Improve LTV or reduce CAC.";
+                insightPaybackPeriod.textContent = paybackPeriod < 12 ? "Quick payback on investment." : "Longer payback period.";
+            }
+
+            function updateCacTrendChart(data) {
+                const trendData = data.reduce((acc, d) => {
+                    const month = new Date(d.month).toLocaleString('default', { month: 'short', year: '2-digit' });
+                    if (!acc[month]) {
+                        acc[month] = { spend: 0, newCustomers: 0 };
+                    }
+                    acc[month].spend += d.spend;
+                    acc[month].newCustomers += d.newCustomers;
+                    return acc;
+                }, {});
+
+                const labels = Object.keys(trendData).sort((a, b) => new Date(`01 ${a}`).getTime() - new Date(`01 ${b}`).getTime()); // Sort by date
+                const values = labels.map(label => {
+                    const monthData = trendData[label];
+                    return monthData.newCustomers > 0 ? monthData.spend / monthData.newCustomers : 0;
+                });
+                
+                cacTrendChart.data = {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Monthly CAC',
+                        data: values,
+                        borderColor: '#3b82f6', // blue-500
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                };
+                cacTrendChart.update();
+            }
+
+            // New function to update the CAC by Channel table
+            function updateCacByChannelTable(data) {
+                cacByChannelTableBody.innerHTML = ''; // Clear existing rows
+                
+                if (data.length === 0) {
+                    cacByChannelTableBody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-neutral-500">No data available for the selected filters.</td></tr>`;
+                    return;
+                }
+
+                const channelData = data.reduce((acc, d) => {
+                    if (!acc[d.channel]) {
+                        acc[d.channel] = { spend: 0, newCustomers: 0 };
+                    }
+                    acc[d.channel].spend += d.spend;
+                    acc[d.channel].newCustomers += d.newCustomers;
+                    return acc;
+                }, {});
+
+                // Convert to array and sort by channel name for consistent display
+                const sortedChannels = Object.keys(channelData).sort();
+
+                sortedChannels.forEach(channel => {
+                    const chData = channelData[channel];
+                    const cac = chData.newCustomers > 0 ? chData.spend / chData.newCustomers : 0;
+                    
+                    let cacClass = '';
+                    if (cac <= 500) {
+                        cacClass = 'cac-good';
+                    } else if (cac > 500 && cac <= 1000) {
+                        cacClass = 'cac-moderate';
+                    } else {
+                        cacClass = 'cac-high';
+                    }
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">${channel}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm ${cacClass}">${formatCurrency(cac)}</td>
+                    `;
+                    cacByChannelTableBody.appendChild(row);
+                });
+            }
+
+            function updateLtvCacBySegmentChart(data) {
+                const segmentData = data.reduce((acc, d) => {
+                    if (!acc[d.segment]) {
+                        acc[d.segment] = { spend: 0, customers: 0, ltv: 0 };
+                    }
+                    acc[d.segment].spend += d.spend;
+                    acc[d.segment].customers += d.newCustomers;
+                    acc[d.segment].ltv += d.ltv * d.newCustomers;
+                    return acc;
+                }, {});
+
+                const labels = Object.keys(segmentData);
+                const values = labels.map(label => {
+                    const segData = segmentData[label];
+                    const cac = segData.newCustomers > 0 ? segData.spend / segData.newCustomers : 0;
+                    const avgLtv = segData.newCustomers > 0 ? segData.ltv / segData.newCustomers : 0;
+                    return cac > 0 ? avgLtv / cac : 0;
+                });
+
+                ltvCacBySegmentChart.data = {
+                    labels: labels,
+                    datasets: [{
+                        label: 'LTV:CAC Ratio',
+                        data: values,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f97316', '#8b5cf6'], // blue, green, orange, purple
+                    }]
+                };
+                ltvCacBySegmentChart.update();
+            }
+            
+            function updateCustomersByRegionChart(data) {
+                const regionData = data.reduce((acc, d) => {
+                    if (!acc[d.region]) {
+                        acc[d.region] = 0;
+                    }
+                    acc[d.region] += d.newCustomers;
+                    return acc;
+                }, {});
+
+                const labels = Object.keys(regionData);
+                const values = Object.values(regionData);
+
+                customersByRegionChart.data = {
+                    labels: labels,
+                    datasets: [{
+                        label: 'New Customers',
+                        data: values,
+                        backgroundColor: ['#3b82f6', '#10b981', '#f97316', '#8b5cf6'], // blue, green, orange, purple
+                        hoverOffset: 4
+                    }]
+                };
+                customersByRegionChart.update();
+            }
+            
+            function updateDetailsTable(data) {
+                detailsTableBody.innerHTML = '';
+                if(data.length === 0) {
+                     detailsTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-neutral-500">No data available for the selected filters.</td></tr>`;
+                     return;
+                }
+
+                data.forEach(d => {
+                    const cac = d.newCustomers > 0 ? d.spend / d.newCustomers : 0;
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">${d.channel}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">${d.segment}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">${d.region}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">${formatCurrency(d.spend)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">${d.newCustomers.toLocaleString()}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">${formatCurrency(cac)}</td>
+                    `;
+                    detailsTableBody.appendChild(row);
+                });
+            }
+
+            function updateSummaryInsights(data) {
+                if (data.length === 0) {
+                    insightChannelPerformance.textContent = "No data to generate channel insights.";
+                    insightSegmentProfitability.textContent = "No data to generate segment insights.";
+                    insightCACtrend.textContent = "No data to analyze CAC trend.";
+                    insightRegionalFocus.textContent = "No data for regional insights.";
+                    return;
+                }
+
+                // Channel Performance Insight
+                const channelAgg = data.reduce((acc, d) => {
+                    acc[d.channel] = (acc[d.channel] || { spend: 0, customers: 0 });
+                    acc[d.channel].spend += d.spend;
+                    acc[d.channel].customers += d.newCustomers;
+                    return acc;
+                }, {});
+                let topChannel = '';
+                let maxCustomers = 0;
+                let lowestCacChannel = '';
+                let minCac = Infinity;
+                Object.entries(channelAgg).forEach(([channel, values]) => {
+                    if (values.customers > maxCustomers) {
+                        maxCustomers = values.customers;
+                        topChannel = channel;
+                    }
+                    const cac = values.customers > 0 ? values.spend / values.customers : Infinity;
+                    if (cac < minCac) {
+                        minCac = cac;
+                        lowestCacChannel = channel;
+                    }
+                });
+                insightChannelPerformance.textContent = `"${topChannel}" is the primary acquisition driver, bringing in ${maxCustomers.toLocaleString()} new customers. "${lowestCacChannel}" demonstrates the most cost-effective acquisition.`;
+
+                // Segment Profitability Insight
+                const segmentAgg = data.reduce((acc, d) => {
+                    acc[d.segment] = (acc[d.segment] || { spend: 0, customers: 0, ltv: 0 });
+                    acc[d.segment].spend += d.spend;
+                    acc[d.segment].customers += d.newCustomers;
+                    acc[d.segment].ltv += d.ltv * d.newCustomers;
+                    return acc;
+                }, {});
+                let bestLtvCacSegment = '';
+                let maxLtvCac = -1;
+                Object.entries(segmentAgg).forEach(([segment, values]) => {
+                    const cac = values.customers > 0 ? values.spend / values.customers : 0;
+                    const avgLtv = values.customers > 0 ? values.ltv / values.customers : 0;
+                    const ltvCac = cac > 0 ? avgLtv / cac : 0;
+                    if (ltvCac > maxLtvCac) {
+                        maxLtvCac = ltvCac;
+                        bestLtvCacSegment = segment;
+                    }
+                });
+                insightSegmentProfitability.textContent = `The "${bestLtvCacSegment}" segment shows the strongest LTV:CAC ratio (${maxLtvCac.toFixed(1)}:1), indicating high long-term profitability.`;
+
+                // CAC Trend Insight
+                const cacTrendData = data.reduce((acc, d) => {
+                    const month = new Date(d.month).toISOString().slice(0, 7); // YYYY-MM
+                    if (!acc[month]) {
+                        acc[month] = { spend: 0, newCustomers: 0 };
+                    }
+                    acc[month].spend += d.spend;
+                    acc[month].newCustomers += d.newCustomers;
+                    return acc;
+                }, {});
+                const sortedMonths = Object.keys(cacTrendData).sort();
+                if (sortedMonths.length >= 2) {
+                    const firstMonthData = cacTrendData[sortedMonths[0]];
+                    const lastMonthData = cacTrendData[sortedMonths[sortedMonths.length - 1]];
+                    const firstCAC = firstMonthData.newCustomers > 0 ? firstMonthData.spend / firstMonthData.newCustomers : 0;
+                    const lastCAC = lastMonthData.newCustomers > 0 ? lastMonthData.spend / lastMonthData.newCustomers : 0;
+                    
+                    if (firstCAC > 0 && lastCAC > 0) {
+                        const change = ((lastCAC - firstCAC) / firstCAC) * 100;
+                        if (change > 5) {
+                            insightCACtrend.textContent = `Overall CAC has increased by ${change.toFixed(1)}% since the start of the period. A deeper dive into cost drivers is recommended.`;
+                        } else if (change < -5) {
+                            insightCACtrend.textContent = `Overall CAC has decreased by ${Math.abs(change).toFixed(1)}% since the start of the period, indicating improved efficiency.`;
+                        } else {
+                            insightCACtrend.textContent = `Overall CAC has remained relatively stable (${change.toFixed(1)}% change) throughout the period.`;
+                        }
+                    } else {
+                        insightCACtrend.textContent = "CAC trend analysis requires more complete data for the period.";
+                    }
+                } else {
+                    insightCACtrend.textContent = "More data points are needed to analyze CAC trend over time.";
+                }
+
+                // Regional Focus Insight
+                const regionCustomers = data.reduce((acc, d) => {
+                    acc[d.region] = (acc[d.region] || 0) + d.newCustomers;
+                    return acc;
+                }, {});
+                let topRegion = '';
+                let maxRegionCustomers = 0;
+                Object.entries(regionCustomers).forEach(([region, customers]) => {
+                    if (customers > maxRegionCustomers) {
+                        maxRegionCustomers = customers;
+                        topRegion = region;
+                    }
+                });
+                insightRegionalFocus.textContent = `"${topRegion}" is the leading region for new customer acquisition, contributing ${maxRegionCustomers.toLocaleString()} customers.`;
+            }
+
+
+            timePeriodFilter.addEventListener('change', updateDashboard);
+            regionFilter.addEventListener('change', updateDashboard);
+            segmentFilter.addEventListener('change', updateDashboard);
+
+            updateDashboard();
+        });
+    </script>
+</body>
+</html>
